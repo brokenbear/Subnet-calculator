@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subnet Calculator</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #d4d4d4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        .calculator-container {
+            background-color: #0a0a0a;
+            border: 1px solid #333;
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: #ffffff;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .icon {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+        }
+        .icon div:nth-child(1) { background-color: #ff8c00; }
+        .icon div:nth-child(2) { background-color: #228b22; }
+        .icon div:nth-child(3) { background-color: #dc143c; }
+        .icon div:nth-child(4) { background-color: #8b0000; }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .grid-1 {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 5px;
+            color: #e0e0e0;
+        }
+        
+        input[type="text"], select {
+            width: 100%;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            border: 1px solid #444;
+            padding: 6px 10px;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+        }
+        input[type="text"]:focus, select:focus {
+            border-color: #007acc;
+        }
+        
+        .readonly-box {
+            background-color: #000000;
+            color: #ffffff;
+            border: 1px solid #222;
+            padding: 6px 10px;
+            font-size: 14px;
+            text-align: center;
+            height: 31px;
+            box-sizing: border-box;
+        }
+
+        .radio-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            height: 31px;
+        }
+        .radio-group label {
+            margin-bottom: 0;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .radio-group input[type="radio"] {
+            margin-right: 5px;
+            accent-color: #007acc;
+        }
+
+        .bitmap-box {
+            background-color: #ffffff;
+            color: #000000;
+            padding: 8px;
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            border: 1px solid #ccc;
+        }
+
+        /* 顏色定義與原圖相符 */
+        .bit-fixed { color: #ff0000; }      /* 紅色：Class 固定位元 */
+        .bit-net { color: #8b0000; }        /* 暗紅：網路位元 */
+        .bit-sub { color: #0000cd; }        /* 藍色：子網段位元 (原圖只有N和H，有切子網段時用藍色區分) */
+        .bit-host { color: #228b22; }       /* 綠色：主機位元 */
+        .bit-dot { color: #ff0000; }        /* 小數點 */
+
+    </style>
+</head>
+<body>
+
+    <div class="calculator-container">
+        <div class="header">
+            <div class="icon">
+                <div></div><div></div><div></div><div></div>
+            </div>
+            Subnet Calculator
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>Network Class</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="netClass" value="A" onchange="changeClass('A')"> A</label>
+                    <label><input type="radio" name="netClass" value="B" onchange="changeClass('B')"> B</label>
+                    <label><input type="radio" name="netClass" value="C" onchange="changeClass('C')" checked> C</label>
+                </div>
+            </div>
+            <div>
+                <label>First Octet Range</label>
+                <div id="outOctetRange" class="readonly-box">192 - 223</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>IP Address</label>
+                <input type="text" id="inIP" value="192.168.0.1" oninput="handleIPInput()">
+            </div>
+            <div>
+                <label>Hex IP Address</label>
+                <div id="outHexIP" class="readonly-box">C0.A8.00.01</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>Subnet Mask</label>
+                <select id="selMask" onchange="syncCIDR(this.value)"></select>
+            </div>
+            <div>
+                <label>Wildcard Mask</label>
+                <div id="outWildcard" class="readonly-box">0.0.0.255</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>Subnet Bits</label>
+                <select id="selSubnetBits" onchange="syncCIDR(this.value)"></select>
+            </div>
+            <div>
+                <label>Mask Bits</label>
+                <select id="selMaskBits" onchange="syncCIDR(this.value)"></select>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>Maximum Subnets</label>
+                <select id="selMaxSubnets" onchange="syncCIDR(this.value)"></select>
+            </div>
+            <div>
+                <label>Hosts per Subnet</label>
+                <select id="selHosts" onchange="syncCIDR(this.value)"></select>
+            </div>
+        </div>
+
+        <div class="grid-1">
+            <label>Host Address Range</label>
+            <div id="outHostRange" class="readonly-box">192.168.0.1 - 192.168.0.254</div>
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>Subnet ID</label>
+                <div id="outSubnetID" class="readonly-box">192.168.0.0</div>
+            </div>
+            <div>
+                <label>Broadcast Address</label>
+                <div id="outBroadcast" class="readonly-box">192.168.0.255</div>
+            </div>
+        </div>
+
+        <div class="grid-1">
+            <label>Subnet Bitmap</label>
+            <div id="outBitmap" class="bitmap-box"></div>
+        </div>
+
+    </div>
+
+    <script>
+        const classInfo = {
+            'A': { defaultCIDR: 8, minFirst: 1, maxFirst: 126, defaultIP: '10.0.0.1', fixedBits: '0', fixedLen: 1 },
+            'B': { defaultCIDR: 16, minFirst: 128, maxFirst: 191, defaultIP: '172.16.0.1', fixedBits: '10', fixedLen: 2 },
+            'C': { defaultCIDR: 24, minFirst: 192, maxFirst: 223, defaultIP: '192.168.0.1', fixedBits: '110', fixedLen: 3 }
+        };
+
+        let currentClass = 'C';
+        let currentCIDR = 24;
+
+        // 初始化
+        window.onload = function() {
+            buildDropdowns();
+            calculate();
+        };
+
+        function changeClass(cls) {
+            currentClass = cls;
+            currentCIDR = classInfo[cls].defaultCIDR;
+            document.getElementById('inIP').value = classInfo[cls].defaultIP;
+            document.getElementById('outOctetRange').innerText = `${classInfo[cls].minFirst} - ${classInfo[cls].maxFirst}`;
+            buildDropdowns();
+            calculate();
+        }
+
+        function handleIPInput() {
+            const ip = document.getElementById('inIP').value;
+            const parts = ip.split('.');
+            if (parts.length > 0 && parts[0] !== '') {
+                const first = parseInt(parts[0], 10);
+                if (!isNaN(first)) {
+                    let newClass = null;
+                    if (first >= 1 && first <= 126) newClass = 'A';
+                    else if (first >= 128 && first <= 191) newClass = 'B';
+                    else if (first >= 192 && first <= 223) newClass = 'C';
+                    
+                    if (newClass && newClass !== currentClass) {
+                        currentClass = newClass;
+                        document.querySelector(`input[name="netClass"][value="${newClass}"]`).checked = true;
+                        document.getElementById('outOctetRange').innerText = `${classInfo[newClass].minFirst} - ${classInfo[newClass].maxFirst}`;
+                        currentCIDR = classInfo[newClass].defaultCIDR;
+                        buildDropdowns();
+                    }
+                }
+            }
+            calculate();
+        }
+
+        // 同步所有下拉選單的變更
+        function syncCIDR(cidrVal) {
+            currentCIDR = parseInt(cidrVal, 10);
+            
+            // 讓所有下拉選單選到正確的數值
+            document.getElementById('selMask').value = currentCIDR;
+            document.getElementById('selSubnetBits').value = currentCIDR;
+            document.getElementById('selMaskBits').value = currentCIDR;
+            document.getElementById('selMaxSubnets').value = currentCIDR;
+            document.getElementById('selHosts').value = currentCIDR;
+            
+            calculate();
+        }
+
+        // 根據選擇的 Class 動態建立下拉選單內容
+        function buildDropdowns() {
+            const info = classInfo[currentClass];
+            const maxCIDR = 30; // 通常網段計算機最多到 /30 (保留給單機可算到32，但原版介面通常限到30)
+            
+            let htmlMask = '', htmlSubnetBits = '', htmlMaskBits = '', htmlMaxSubnets = '', htmlHosts = '';
+
+            for (let i = info.defaultCIDR; i <= maxCIDR; i++) {
+                let maskInt = (~0 << (32 - i)) >>> 0;
+                let maskStr = intToIp(maskInt);
+                let subnetBits = i - info.defaultCIDR;
+                let maxSubnets = Math.pow(2, subnetBits);
+                let hosts = Math.pow(2, 32 - i) - 2;
+                if (hosts < 0) hosts = 0;
+
+                let selected = (i === currentCIDR) ? 'selected' : '';
+
+                htmlMask += `<option value="${i}" ${selected}>${maskStr}</option>`;
+                htmlSubnetBits += `<option value="${i}" ${selected}>${subnetBits}</option>`;
+                htmlMaskBits += `<option value="${i}" ${selected}>${i}</option>`;
+                htmlMaxSubnets += `<option value="${i}" ${selected}>${maxSubnets.toLocaleString()}</option>`;
+                htmlHosts += `<option value="${i}" ${selected}>${hosts.toLocaleString()}</option>`;
+            }
+
+            document.getElementById('selMask').innerHTML = htmlMask;
+            document.getElementById('selSubnetBits').innerHTML = htmlSubnetBits;
+            document.getElementById('selMaskBits').innerHTML = htmlMaskBits;
+            document.getElementById('selMaxSubnets').innerHTML = htmlMaxSubnets;
+            document.getElementById('selHosts').innerHTML = htmlHosts;
+        }
+
+        function calculate() {
+            const ipStr = document.getElementById('inIP').value;
+            const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            
+            if (!ipRegex.test(ipStr)) {
+                return; // 等待使用者輸入正確格式
+            }
+
+            const ipInt = ipToInt(ipStr);
+            const maskInt = (~0 << (32 - currentCIDR)) >>> 0;
+            const wildcardInt = ~maskInt >>> 0;
+            
+            const networkInt = (ipInt & maskInt) >>> 0;
+            const broadcastInt = (networkInt | wildcardInt) >>> 0;
+
+            // Hex IP
+            const hexParts = ipStr.split('.').map(octet => parseInt(octet).toString(16).toUpperCase().padStart(2, '0'));
+            document.getElementById('outHexIP').innerText = hexParts.join('.');
+
+            // Wildcard
+            document.getElementById('outWildcard').innerText = intToIp(wildcardInt);
+
+            // Subnet ID & Broadcast
+            document.getElementById('outSubnetID').innerText = intToIp(networkInt);
+            document.getElementById('outBroadcast').innerText = intToIp(broadcastInt);
+
+            // Host Range
+            let hostsNum = Math.pow(2, 32 - currentCIDR) - 2;
+            if (hostsNum > 0) {
+                document.getElementById('outHostRange').innerText = `${intToIp(networkInt + 1)} - ${intToIp(broadcastInt - 1)}`;
+            } else {
+                document.getElementById('outHostRange').innerText = 'N/A';
+            }
+
+            // Bitmap Generator
+            generateBitmap();
+        }
+
+        function generateBitmap() {
+            const info = classInfo[currentClass];
+            const defCidr = info.defaultCIDR;
+            
+            // 建立 32 位元的標記陣列 (F: Fixed, N: Network, S: Subnet, H: Host)
+            let bitMapArray = new Array(32).fill('H');
+            
+            for (let i = 0; i < info.fixedLen; i++) bitMapArray[i] = 'F';
+            for (let i = info.fixedLen; i < defCidr; i++) bitMapArray[i] = 'N';
+            for (let i = defCidr; i < currentCIDR; i++) bitMapArray[i] = 'S';
+
+            let html = '';
+            for (let i = 0; i < 32; i++) {
+                if (i > 0 && i % 8 === 0) {
+                    html += `<span class="bit-dot">.</span>`;
+                }
+                
+                let char = '';
+                let cssClass = '';
+                
+                if (bitMapArray[i] === 'F') {
+                    char = info.fixedBits[i];
+                    cssClass = 'bit-fixed';
+                } else if (bitMapArray[i] === 'N') {
+                    char = 'n';
+                    cssClass = 'bit-net';
+                } else if (bitMapArray[i] === 'S') {
+                    char = 's'; // 顯示 s 代表子網段，以區別原本的網路位元
+                    cssClass = 'bit-sub';
+                } else {
+                    char = 'h';
+                    cssClass = 'bit-host';
+                }
+                
+                html += `<span class="${cssClass}">${char}</span>`;
+            }
+
+            document.getElementById('outBitmap').innerHTML = html;
+        }
+
+        function ipToInt(ip) {
+            return ip.split('.').reduce((int, octet) => (int << 8) + parseInt(octet, 10), 0) >>> 0;
+        }
+
+        function intToIp(int) {
+            return [ (int >>> 24) & 255, (int >>> 16) & 255, (int >>> 8) & 255, int & 255 ].join('.');
+        }
+    </script>
+</body>
+</html>
